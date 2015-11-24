@@ -32,7 +32,8 @@ RC BTreeIndex::open(const string& indexname, char mode)
 {
 	RC rc;
 	//open the file
-	rc = pf.open(indexname,mode);
+	if(rc = pf.open(indexname,mode) < 0)
+		return rc;
 	//retrieve the treeHeight and rootpid
 	int buf[256];
 	if (pf.endPid() == 0)
