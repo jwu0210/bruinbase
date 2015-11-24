@@ -127,6 +127,11 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		//can't self original next ptr since we don't know sibling's page id
 		sibling.insert(key,rid);
 		memset(temp,0,size);
+		num = getKeyCount();
+		num++;
+		num /= 2;
+		memcpy(buffer+PageFile::PAGE_SIZE-8, &num, sizeof(int));
+		
 		setNextNodePtr(-1);
 		RecordId rid;
 		sibling.readEntry(0,siblingKey,rid);
@@ -145,15 +150,16 @@ RC BTLeafNode::insertAndSplit(int key, const RecordId& rid,
 		}
 		sibling.setNextNodePtr(getNextNodePtr());
 		memset(temp,0, size);
+		num = getKeyCount();
+		num /= 2;
+		memcpy(buffer+PageFile::PAGE_SIZE-8, &num, sizeof(int));
+		
 		setNextNodePtr(-1);
 		insert(key,rid);
 	}
 	//maintain the key number
-	num = getKeyCount();
-	num++;
-	num /= 2;
-	memcpy(buffer+PageFile::PAGE_SIZE-8, &num, sizeof(int));
-	//memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &num, sizeof(int));
+
+	//memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &sibling.num, sizeof(int));
 	//sibling.num = num;
 	return 0; 
 }
@@ -348,6 +354,7 @@ RC BTNonLeafNode::insert(int key, PageId pid)
  * @param midKey[OUT] the key in the middle after the split. This key should be inserted to the parent node.
  * @return 0 if successful. Return an error code if there is an error.
  */
+ //original node always have one node more than its sibling
 RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, int& midKey)
 { 
 	PageId tmp;
@@ -359,11 +366,17 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 	if (pos <= (MAX_LEAF_ENTRY_NUM+1)/2)
 	{
 		offset = 8*(MAX_LEAF_ENTRY_NUM-1)/2+4;
-		memcpy(&midKey, &buffer+offset, sizeof(int));
+		memcpy(&midKey, buffer+offset, sizeof(int));
 		leftover = 8*(MAX_LEAF_ENTRY_NUM-1)/2+4;
 		memcpy(sibling.buffer, buffer+offset+4, leftover);
 		memset(buffer+offset, 0, leftover+4);
+		
+		m_num -= (MAX_LEAF_ENTRY_NUM-1)/2+1;
+		memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 		insert(key,pid);
+		//update sibling key number
+		sibling.m_num += (MAX_LEAF_ENTRY_NUM-1)/2;
+		memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &sibling.m_num, sizeof(int));
 	}
 	else if (pos == (MAX_LEAF_ENTRY_NUM+3)/2)
 	{
@@ -373,6 +386,11 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		memcpy(sibling.buffer, &pid, sizeof(int));
 		memcpy(sibling.buffer+4, buffer+offset, leftover);
 		memset(buffer+offset,0,leftover);
+		//update sibling key number
+		sibling.m_num += (MAX_LEAF_ENTRY_NUM-1)/2;
+		memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &sibling.m_num, sizeof(int));
+		m_num -= (MAX_LEAF_ENTRY_NUM-1)/2;
+		memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 	}
 	else
 	{
@@ -382,9 +400,12 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		memcpy(sibling.buffer, buffer+offset+4, leftover);
 		memset(buffer+offset, 0, leftover+4);
 		sibling.insert(key,pid);
+		//update sibling key number
+		sibling.m_num += (MAX_LEAF_ENTRY_NUM-1)/2 - 1;
+		memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &sibling.m_num, sizeof(int));
+		m_num -= (MAX_LEAF_ENTRY_NUM-1)/2;
+		memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 	}
-	m_num -= (MAX_LEAF_ENTRY_NUM-1)/2;
-	memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 	return 0; 
 }
 
