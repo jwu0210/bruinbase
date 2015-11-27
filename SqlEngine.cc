@@ -13,8 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <set>
-#include <sstream>
-#include <limits.h>
+#include <map>
 #include "Bruinbase.h"
 #include "SqlEngine.h"
 #include "BTreeIndex.h"
@@ -28,10 +27,35 @@
  bool reach(IndexCursor i1, IndexCursor i2)
  {
   return (i1.pid == i2.pid && (i1.eid == i2.eid || i2.eid == -1));
- }
+}
 
- RC SqlEngine::run(FILE* commandline)
- {
+bool compDiff(int diff, SelCond::Comparator comp)
+{
+  switch (comp) {
+    case SelCond::EQ:
+    if (diff != 0) return false;
+    break;
+    case SelCond::NE:
+    if (diff == 0) return false;
+    break;
+    case SelCond::GT:
+    if (diff <= 0) return false;
+    break;
+    case SelCond::LT:
+    if (diff >= 0) return false;
+    break;
+    case SelCond::GE:
+    if (diff < 0) return false;
+    break;
+    case SelCond::LE:
+    if (diff > 0) return false;
+    break;
+  }
+  return true;
+}
+
+RC SqlEngine::run(FILE* commandline)
+{
   fprintf(stdout, "Bruinbase> ");
 
   // set the command line input and start parsing user input
@@ -69,22 +93,28 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
 
   if(indexed){
     //organize conditions:
-    set<string> valueCond;
+    map<string,SelCond::Comparator> valueCond;
     set<int> EQCond;
     set<int> NECond;
+
     SelCond upperBound;
-    upperBound.attr = -1;
+    upperBound.comp = SelCond::LE;
+    upperBound.value = "2147483647";
+
     SelCond lowerBound;
-    lowerBound.attr = -1;
+    lowerBound.comp = SelCond::GE;
+    lowerBound.value = "-2147483647";
 
     IndexCursor start;
     IndexCursor end;
+
+    bool willReturn;
 
     for (int i = 0; i < cond.size(); ++i)
     {
       if (cond[i].attr == 2)
       {
-        valueCond.insert(cond[i].value);
+        valueCond[cond[i].value] = cond[i].comp;
       }
       else
       {
@@ -98,40 +128,40 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           case SelCond::GT:
           case SelCond::GE:
           {
-            if(upperBound.attr == -1 || atoi(cond[i].value) > atoi(upperBound.value))
+            if(atoi(cond[i].value) > atoi(lowerBound.value))
             {
-              upperBound = cond[i];
+              lowerBound = cond[i];
             }
-            else if(atoi(cond[i].value) == atoi(upperBound.value) && upperBound.comp == SelCond::GE)
+            else if((atoi(cond[i].value) == atoi(lowerBound.value)) && (lowerBound.comp == SelCond::GE))
             {
               if(cond[i].comp == SelCond::GT)
-                upperBound = cond[i];
+                lowerBound = cond[i];
             }
             break;
           }
           case SelCond::LT:
           case SelCond::LE:
           {
-            if(lowerBound.attr == -1 || atoi(cond[i].value) < atoi(lowerBound.value))
+            if(atoi(cond[i].value) < atoi(upperBound.value))
             {
-              lowerBound = cond[i];
+              upperBound = cond[i];
             }
-            else if(atoi(cond[i].value) == atoi(lowerBound.value) && lowerBound.comp == SelCond::LE)
+            else if((atoi(cond[i].value) == atoi(upperBound.value)) && (upperBound.comp == SelCond::LE))
             {
               if(cond[i].comp == SelCond::LT)
-                lowerBound = cond[i];
+                upperBound = cond[i];
             }
             break;
           }
           default:
-            break;
+          break;
         }
       }
     }
 
     //not found
-    if (EQCond.size() > 1 || upperBound.value < lowerBound.value || 
-      (upperBound.value == lowerBound.value && (upperBound.comp != SelCond::GE || lowerBound.comp != SelCond::LE)))
+    if (EQCond.size() > 1 || atoi(upperBound.value) < atoi(lowerBound.value) || 
+      (atoi(upperBound.value) == atoi(lowerBound.value) && (upperBound.comp != SelCond::LE || lowerBound.comp != SelCond::GE)))
     {
       goto exit_idx_select;
     }
@@ -140,9 +170,9 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       if(NECond.find(*EQCond.begin()) != NECond.end())
         goto exit_idx_select;
       if((*EQCond.begin() > atoi(upperBound.value)) ||
-       (*EQCond.begin() == atoi(upperBound.value) && upperBound.comp == SelCond::GT) ||
+       (*EQCond.begin() == atoi(upperBound.value) && upperBound.comp == SelCond::LT) ||
        (*EQCond.begin() < atoi(lowerBound.value)) ||
-       (*EQCond.begin() == atoi(lowerBound.value) && lowerBound.comp == SelCond::LT))
+       (*EQCond.begin() == atoi(lowerBound.value) && lowerBound.comp == SelCond::GT))
         goto exit_idx_select;
       if(rc = indexTree.locate(*EQCond.begin(),index) < 0)
         goto exit_idx_select;
@@ -151,8 +181,18 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
       if(rc = rf.read(rid,key,value) < 0)
         goto exit_idx_select;
 
-      if(!(valueCond.size() == 0 || valueCond.find(value) != valueCond.end()))
-        goto exit_idx_select;
+      if(valueCond.size() != 0)
+      {
+        for(map<string,SelCond::Comparator>::iterator it = valueCond.begin(); it != valueCond.end(); it++)
+        {
+          if (!compDiff(strcmp(value.c_str(), (it->first).c_str()), it->second))
+          {
+            goto exit_idx_select;
+          }
+        }
+      }
+
+
       count = 1;
       switch (attr) {
         case 1:  // SELECT key
@@ -172,27 +212,41 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
     }
     else {
       count = 0;
-      if(rc = indexTree.locate(atoi(lowerBound.value),index) == 0)
-      {
-        if(lowerBound.comp == SelCond::LT)
-          indexTree.readForward(index,key,rid);
-      }
+      rc = indexTree.locate(atoi(lowerBound.value),index);
+      
+      if(lowerBound.comp == SelCond::GT || rc < 0)
+        indexTree.readForward(index,key,rid);
       start = index;
-      if(rc = indexTree.locate(atoi(upperBound.value),index) == 0)
-      {
-        if(upperBound.comp == SelCond::GE)
-          indexTree.readForward(index,key,rid);
-      }
+      
+      rc = indexTree.locate(atoi(upperBound.value),index);
+      if(upperBound.comp == SelCond::LE || rc < 0)
+        indexTree.readForward(index,key,rid);    
       end = index;
+
       while(!reach(start,end)) //condition when end is start of a leaf with eid = -1
       {
+        willReturn = true;
         indexTree.readForward(start,key,rid);
         if(NECond.find(key) != NECond.end())
           continue;
         if(rc = rf.read(rid,key,value) < 0)
           goto exit_idx_select;
-        if(!(valueCond.size() == 0 || valueCond.find(value) != valueCond.end()))
+
+        if(valueCond.size() != 0)
+        {
+          for(map<string,SelCond::Comparator>::iterator it = valueCond.begin(); it != valueCond.end(); it++)
+          {
+            if (!compDiff(strcmp(value.c_str(), (it->first).c_str()), it->second))
+            {
+              willReturn = false;
+              break;
+            }
+          }
+        }
+        if (!willReturn)
+        {
           continue;
+        }
 
         switch (attr) {
           case 1:  // SELECT key
@@ -204,17 +258,17 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
           case 3:  // SELECT *
           fprintf(stdout, "%d '%s'\n", key, value.c_str());
           break;
-          }
-          count++;
+        }
+        count++;
       }
       if (attr == 4) {
         fprintf(stdout, "%d\n", count);
       }
 
-  exit_idx_select:
-  rf.close();
-  indexTree.close();
-  return rc;
+      exit_idx_select:
+      rf.close();
+      indexTree.close();
+      return rc;
     }
   }
 
@@ -242,26 +296,8 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         }
 
       // skip the tuple if any condition is not met
-        switch (cond[i].comp) {
-          case SelCond::EQ:
-          if (diff != 0) goto next_tuple;
-          break;
-          case SelCond::NE:
-          if (diff == 0) goto next_tuple;
-          break;
-          case SelCond::GT:
-          if (diff <= 0) goto next_tuple;
-          break;
-          case SelCond::LT:
-          if (diff >= 0) goto next_tuple;
-          break;
-          case SelCond::GE:
-          if (diff < 0) goto next_tuple;
-          break;
-          case SelCond::LE:
-          if (diff > 0) goto next_tuple;
-          break;
-        }
+        if(!compDiff(diff, cond[i].comp))
+          goto next_tuple;
       }
 
     // the condition is met for the tuple. 

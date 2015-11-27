@@ -279,7 +279,7 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 	//read the node
 	if (rc = leafptr->read(cursor.pid, pf) < 0) return rc;
 	//set key and rid
-	if (rc = leafptr->readEntry(cursor.eid, key, rid) < 0) return rc;
+	rc = leafptr->readEntry(cursor.eid, key, rid);
 	//set the cursor pointing to the next entry
 	if (cursor.eid == leafptr->getKeyCount() - 1)
 	{
@@ -289,5 +289,5 @@ RC BTreeIndex::readForward(IndexCursor& cursor, int& key, RecordId& rid)
 	else
 		cursor.eid += 1;
 	delete leafptr;
-    return 0;
+    return rc;
 }

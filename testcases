@@ -1,0 +1,23 @@
+select count(*) from test where key <= 2634 and key > 273 and key <> 489 and key <> 273 
+
+select count(*) from testidx where key <= 2634 and key > 273 and key <> 489 and key <> 273 
+
+
+select count(*) from test where value > 'Baby Take a Bow' and value < 'Outside the Law' and value <> 'King Creole'
+
+select count(*) from testidx where value > 'Baby Take a Bow' and value < 'Outside the Law' and value <> 'King Creole'
+
+
+select count(*) from test where key <= 2634 and key > 273 and key <> 489 and key <> 273 and value > 'G.I. Blues'
+
+select count(*) from testidx where key <= 2634 and key > 273 and key <> 489 and key <> 273 and value > 'G.I. Blues'
+
+
+
+load test from 'movie.del'
+load testidx from 'movie.del' [WITH INDEX]
+
+
+b SqlEngine::select
+b SqlEngine::load
+b main
