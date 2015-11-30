@@ -229,8 +229,12 @@ RC SqlEngine::select(int attr, const string& table, const vector<SelCond>& cond)
         indexTree.readForward(start,key,rid);
         if(NECond.find(key) != NECond.end())
           continue;
-        if(rc = rf.read(rid,key,value) < 0)
-          goto exit_idx_select;
+
+        if (!(attr == 4 && valueCond.size() == 0))
+        {
+          if(rc = rf.read(rid,key,value) < 0)
+            goto exit_idx_select;
+        }
 
         if(valueCond.size() != 0)
         {

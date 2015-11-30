@@ -12,7 +12,9 @@ select count(*) from test where key <= 2634 and key > 273 and key <> 489 and key
 
 select count(*) from testidx where key <= 2634 and key > 273 and key <> 489 and key <> 273 and value > 'G.I. Blues'
 
+select * from test where key = 273
 
+select * from testidx where key = 273
 
 load test from 'movie.del'
 load testidx from 'movie.del' [WITH INDEX]

@@ -238,7 +238,7 @@ RC BTreeIndex::locate(int searchKey, IndexCursor& cursor)
 	parent_node[0] = rootPid;
 
 	//locate child ptr while nonleaf node
-	PageId pid;
+	PageId pid = rootPid;
 	int pos;
 	int height = 1;
 	while (height < treeHeight)

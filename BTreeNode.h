@@ -13,7 +13,7 @@
 #include "RecordFile.h"
 #include "PageFile.h"
 
-const int MAX_LEAF_ENTRY_NUM = 3;
+const int MAX_LEAF_ENTRY_NUM = 83;
 typedef struct {
   // PageId of the index entry
   RecordId  rid;  

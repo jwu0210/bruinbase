@@ -53,15 +53,6 @@ RC BTLeafNode::write(PageId pid, PageFile& pf)
  */
 int BTLeafNode::getKeyCount()
 { 
-	/*int key_num = 0;
-	int *buf = (int*) buffer;
-	for (int i = 0; i < MAX_LEAF_ENTRY_NUM; i++)
-	{
-		int k = *(buf+3*i+2);
-		if (k >= 0) key_num++;
-	}
-	return key_num;*/
-	//this number has to be stored in the buf otherwise would be lost
 	int key_num = 0;
 	memcpy(&key_num,buffer+PageFile::PAGE_SIZE-8,sizeof(int));
 	return key_num;
@@ -399,10 +390,10 @@ RC BTNonLeafNode::insertAndSplit(int key, PageId pid, BTNonLeafNode& sibling, in
 		leftover = 8*(MAX_LEAF_ENTRY_NUM-3)/2+4;
 		memcpy(sibling.buffer, buffer+offset+4, leftover);
 		memset(buffer+offset, 0, leftover+4);
-		sibling.insert(key,pid);
 		//update sibling key number
-		sibling.m_num += (MAX_LEAF_ENTRY_NUM-1)/2 - 1;
+		sibling.m_num = (MAX_LEAF_ENTRY_NUM-1)/2 - 1;
 		memcpy(sibling.buffer+PageFile::PAGE_SIZE-8, &sibling.m_num, sizeof(int));
+		sibling.insert(key,pid);
 		m_num -= (MAX_LEAF_ENTRY_NUM-1)/2;
 		memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 	}
@@ -427,3 +418,5 @@ RC BTNonLeafNode::initializeRoot(PageId pid1, int key, PageId pid2)
 	m_num++;
 	memcpy(buffer+PageFile::PAGE_SIZE-8, &m_num, sizeof(int));
 }
+
+
